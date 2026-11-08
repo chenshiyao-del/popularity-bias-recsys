@@ -1,0 +1,28 @@
+# Data directories
+data/raw/
+data/interim/
+data/processed/
+
+# Data file formats
+*.jsonl
+*.jsonl.gz
+*.parquet
+*.csv
+*.pkl
+*.zip
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Hugging Face cache (if inside project)
+hf_cache/
