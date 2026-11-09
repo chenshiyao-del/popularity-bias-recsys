@@ -1,4 +1,3 @@
-import gzip
 import json
 import os
 
@@ -9,12 +8,14 @@ import pyarrow.parquet as pq
 os.environ["HF_HOME"] = r"D:\hf_cache"
 os.environ["HF_DATASETS_CACHE"] = r"D:\hf_cache\datasets"
 
-RAW_DIR = "data/raw"
-OUT_DIR = "data/interim"
+# raw files live in "Data cleaning/<name>.jsonl/<name>.jsonl", two levels above this script
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+RAW_DIR = BASE_DIR
+OUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "interim")
 os.makedirs(OUT_DIR, exist_ok=True)
 
-category = "Beauty_and_Personal_Care"
-src_path = os.path.join(RAW_DIR, f"meta_{category}.jsonl.gz")
+category = "Clothing_Shoes_and_Jewelry"
+src_path = os.path.join(RAW_DIR, f"meta_{category}.jsonl", f"meta_{category}.jsonl")
 out_path = os.path.join(OUT_DIR, f"{category}_meta.parquet")
 
 META_FIELDS = [
@@ -108,7 +109,7 @@ def flush(records):
     return table
 
 
-with gzip.open(src_path, "rt", encoding="utf-8") as f:
+with open(src_path, "r", encoding="utf-8") as f:
     for line in f:
         try:
             obj = json.loads(line)

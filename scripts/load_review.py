@@ -1,7 +1,7 @@
 import pandas as pd
 
 # Change path for other categories 
-path = "data/interim/Beauty_and_Personal_Care_full.parquet"
+path = "data/interim/Clothing_Shoes_and_Jewelry_full.parquet"
 
 df = pd.read_parquet(
     path,
