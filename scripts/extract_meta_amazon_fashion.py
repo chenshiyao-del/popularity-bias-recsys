@@ -20,7 +20,7 @@ OUT_DIR = REPO_DIR / "data" / "interim"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 category = "Amazon_Fashion"
-src_path = RAW_DIR / f"meta_{category}.jsonl.gz"
+src_path = RAW_DIR / f"meta_{category}.jsonl"
 out_path = OUT_DIR / f"{category}_meta.parquet"
 
 print("Reading from:", src_path, "| exists:", src_path.exists())
@@ -116,7 +116,16 @@ def flush(records):
     return table
 
 
-with gzip.open(src_path, "rt", encoding="utf-8") as f:
+def open_text(path):
+    """Open a .jsonl file as text, transparently handling gzip or plain text."""
+    with open(path, "rb") as fb:
+        is_gzip = fb.read(2) == b"\x1f\x8b"
+    if is_gzip:
+        return gzip.open(path, "rt", encoding="utf-8")
+    return open(path, "r", encoding="utf-8")
+
+
+with open_text(src_path) as f:
     for line in f:
         try:
             obj = json.loads(line)
