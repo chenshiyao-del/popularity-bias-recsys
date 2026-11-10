@@ -1,15 +1,18 @@
-import gzip
+# PARQUET FILES ARE ABOUT 12 GB SO WE ARENT ABLE TO PUT THEM IN THE GITHUB REPO
 import json
 import os
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+
 os.environ["HF_HOME"] = r"D:\hf_cache"
 os.environ["HF_DATASETS_CACHE"] = r"D:\hf_cache\datasets"
 
-RAW_DIR = "data/raw"
-OUT_DIR = "data/interim"
+# raw files live in "Data cleaning/<name>.jsonl/<name>.jsonl", two levels above this script
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+RAW_DIR = BASE_DIR
+OUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "interim")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # change category for other categories 
@@ -34,7 +37,7 @@ writer = None
 total_rows = 0
 chunk_id = 0
 
-with gzip.open(src_path, "rt", encoding="utf-8") as f:
+with open(src_path, "r", encoding="utf-8") as f:
     for line in f:
         try:
             obj = json.loads(line)
