@@ -38,6 +38,7 @@ META_FIELDS = [
     "details",
     "parent_asin",
     "bought_together",
+    "user_id"
 ]
 
 JSON_FIELDS = {"features", "description", "categories", "details", "bought_together"}
