@@ -15,8 +15,9 @@ RAW_DIR = BASE_DIR
 OUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "interim")
 os.makedirs(OUT_DIR, exist_ok=True)
 
-category = "Clothing_Shoes_and_Jewelry"
-src_path = os.path.join(RAW_DIR, f"{category}.jsonl", f"{category}.jsonl")
+# change category for other categories 
+category = "Beauty_and_Personal_Care"
+src_path = os.path.join(RAW_DIR, f"{category}.jsonl.gz")
 out_path = os.path.join(OUT_DIR, f"{category}_full.parquet")
 
 REVIEW_FIELDS = [
