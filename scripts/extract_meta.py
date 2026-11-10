@@ -13,6 +13,7 @@ RAW_DIR = "data/raw"
 OUT_DIR = "data/interim"
 os.makedirs(OUT_DIR, exist_ok=True)
 
+# change category for other categories. 
 category = "Beauty_and_Personal_Care"
 src_path = os.path.join(RAW_DIR, f"meta_{category}.jsonl.gz")
 out_path = os.path.join(OUT_DIR, f"{category}_meta.parquet")
