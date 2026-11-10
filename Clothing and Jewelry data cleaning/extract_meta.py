@@ -1,3 +1,4 @@
+# PARQUET FILES ARE ABOUT 12 SO WE ARENT ABLE TO PUT THEM IN THE GITHUB REPO
 import json
 import os
 
@@ -20,6 +21,7 @@ out_path = os.path.join(OUT_DIR, f"{category}_meta.parquet")
 
 META_FIELDS = [
     "main_category",
+    "user_id",
     "title",
     "average_rating",
     "rating_number",

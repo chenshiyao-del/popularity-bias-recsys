@@ -1,8 +1,10 @@
+# PARQUET FILES ARE ABOUT 12 GB SO WE ARENT ABLE TO PUT THEM IN THE GITHUB REPO
 import json
 import os
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+
 
 os.environ["HF_HOME"] = r"D:\hf_cache"
 os.environ["HF_DATASETS_CACHE"] = r"D:\hf_cache\datasets"
