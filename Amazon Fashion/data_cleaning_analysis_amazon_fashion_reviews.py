@@ -9,7 +9,7 @@ import pyarrow.parquet as pq
 
 REPO_DIR = Path(__file__).resolve().parent.parent
 path = REPO_DIR / "data" / "interim" / "Amazon_Fashion_full.parquet"
-reviews = pd.read_parquet(path, columns = ["rating", "title", "text", "asin", "parent_asin", "user_id",
+reviews = pd.read_parquet(path, columns = ["rating", "asin", "parent_asin", "user_id",
                "timestamp", "verified_purchase"])
 
 COLUMNS = ["rating", "title", "text", "asin", "parent_asin", "user_id",
@@ -31,18 +31,13 @@ REPO_DIR = Path(__file__).resolve().parent.parent
 meta_path = REPO_DIR / "data" / "interim" / "Amazon_Fashion_meta.parquet"
 
 META_FIELDS = [
-    "main_category",
-    "title",
     "average_rating",
     "rating_number",
-    "features",
-    "description",
     "price",
     "store",
     "categories",
     "details",
     "parent_asin",
-    "bought_together",
     "user_id"
 ]
 #meta = (pq.ParquetFile(meta_path).read_row_group(0, columns=META_FIELDS).to_pandas().sample(n=10_000, random_state=RANDOM_SEED).reset_index(drop=True))
@@ -259,8 +254,12 @@ arrival["new_items"] = arrival.sum(axis=1)
 arrival["head_share"] = arrival.get(True, 0) / arrival["new_items"]
 print(arrival)
 
+# Index metadata by parent_asin so joins/reindexing below match on item id
+meta = meta.set_index("parent_asin")
+meta_items = meta
+
 # Store concentration
-m = data[["parent_asin"]].join(meta_items[["store"]], on="parent_asin", how="left")
+m =data[["parent_asin"]].join(meta[["store"]], on="parent_asin", how="left")
 store_counts = m["store"].dropna().value_counts()
 top = max(1, int(len(store_counts) * 0.02))
 print(f"Top 2% of stores ({top:,}) account for "
@@ -269,7 +268,7 @@ print(f"Store Gini: {gini(store_counts):.3f} | reviews with no store: {m['store'
 
 
 # Metadata coverage over head and tail
-item_meta = meta_items.reindex(item_counts.index)
+item_meta = meta.reindex(item_counts.index)
 item_meta["is_head"] = item_meta.index.isin(HEAD_ITEMS)
 item_meta["in_meta"] = item_meta.index.isin(meta_items.index)
 
@@ -281,7 +280,7 @@ print(item_meta.groupby("is_head")["in_meta"].mean().round(3))
 
 # Price vs. popularity
 item_stats = data.groupby("parent_asin")["rating"].agg(n="count", mean_rating="mean")
-pp = item_stats[["n"]].join(meta_items["price"]).dropna(subset=["price"])
+pp = item_stats[["n"]].join(meta["price"]).dropna(subset=["price"])
 print(f"Items with a price: {len(pp)/len(item_stats):.2%}")
 
 if len(pp) > 10:
