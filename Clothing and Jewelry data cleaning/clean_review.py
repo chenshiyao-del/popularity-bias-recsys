@@ -4,41 +4,69 @@ from pathlib import Path
 
 # Change path for other categories
 path = Path(__file__).resolve().parent.parent / "interim" / "Clothing_Shoes_and_Jewelry_full.parquet"
+OUT = Path(__file__).resolve().parent.parent / "interim" / "Clothing_Shoes_and_Jewelry_interactions.parquet"
 
-COLUMNS = ["rating", "title", "text", "asin", "parent_asin", "user_id",
+KEEP = ["rating", "asin", "parent_asin", "user_id",
            "timestamp", "verified_purchase"]
 
+ONLY_VERIFIED = True
+MAX_ROW_GROUPS = None   # set to e.g. 2 for a quick test run
 
-reviews = pq.ParquetFile(path).read_row_group(0, columns=COLUMNS).to_pandas().sample(n=10_000, random_state=42).reset_index(drop=True)
 
-# Getting real datetime and fixing corrupted ratings
-reviews["timestamp"] = pd.to_datetime(reviews["timestamp"], unit="ms")
-reviews["rating"] = pd.to_numeric(reviews["rating"], errors="coerce")
-reviews = reviews.dropna(subset=COLUMNS)
+# The full file is ~9 GB / 66M rows, so it is read one row group at a time and
+# only the interaction columns are carried forward.
+pf = pq.ParquetFile(path)
+n_groups = pf.num_row_groups if MAX_ROW_GROUPS is None else min(MAX_ROW_GROUPS, pf.num_row_groups)
 
-# Removing duplicates
-n0 = len(reviews)
-reviews = reviews.drop_duplicates()   # exact duplicate rows
-print(f"Exact duplicates removed: {n0 - len(reviews):,}")
-dup_pairs = reviews.duplicated(["user_id", "parent_asin"], keep=False).sum()
-print(f"Rows in repeated (user, parent_asin) pairs: {dup_pairs:,} ({dup_pairs/len(reviews):.2%})")
+chunks = []
+raw_rows = 0
+verified_counts = pd.Series(dtype="int64")
+rating_sums = pd.Series(dtype="float64")
+rating_counts = pd.Series(dtype="int64")
+
+for i in range(n_groups):
+    chunk = pf.read_row_group(i, columns=KEEP).to_pandas()
+    raw_rows += len(chunk)
+
+    # Getting real datetime and fixing corrupted ratings
+    chunk["timestamp"] = pd.to_datetime(chunk["timestamp"], unit="ms", errors="coerce")
+    chunk["rating"] = pd.to_numeric(chunk["rating"], errors="coerce")
+    chunk = chunk.dropna(subset=KEEP)
+
+    # Verified purchase stats, accumulated across row groups
+    verified_counts = verified_counts.add(chunk["verified_purchase"].value_counts(), fill_value=0)
+    grp = chunk.groupby("verified_purchase")["rating"]
+    rating_sums = rating_sums.add(grp.sum(), fill_value=0)
+    rating_counts = rating_counts.add(grp.count(), fill_value=0)
+
+    if ONLY_VERIFIED:
+        chunk = chunk[chunk["verified_purchase"] == True]
+
+    chunk = chunk[KEEP].copy()
+    chunk["rating"] = chunk["rating"].astype("float32")
+    chunk["user_id"] = chunk["user_id"].astype("string[pyarrow]")
+    chunk["parent_asin"] = chunk["parent_asin"].astype("string[pyarrow]")
+    chunks.append(chunk)
+    print(f"row group {i + 1}/{n_groups} -> kept {len(chunk):,} rows", flush=True)
+
+reviews = pd.concat(chunks, ignore_index=True)
+del chunks
+print("Raw rows read:", f"{raw_rows:,}")
+
+print(verified_counts / verified_counts.sum())
+print(pd.DataFrame({"mean": rating_sums / rating_counts, "count": rating_counts.astype("int64")}))
+print("Rows kept:", len(reviews))
 
 reviews = (reviews.sort_values("timestamp")
                   .drop_duplicates(["user_id", "parent_asin"], keep="last")
                   .reset_index(drop=True))
 
-# Verified purchase cleaning
-print(reviews["verified_purchase"].value_counts(normalize=True))
-print(reviews.groupby("verified_purchase")["rating"].agg(["mean", "count"]))
-ONLY_VERIFIED = True
-if ONLY_VERIFIED:
-    reviews = reviews[reviews["verified_purchase"] == True].copy()
-print("Rows kept:", len(reviews))
-
 # Making every verified review a positive interaction
-interactions = reviews.copy()
-interactions = interactions[["user_id", "parent_asin", "rating", "timestamp"]]
+interactions = reviews[["user_id", "parent_asin", "rating", "timestamp"]]
 print("Interactions:", len(interactions))
+
+interactions.to_parquet(OUT, index=False)
+print("Saved to:", OUT)
 
 # Checking to make sure all the cleaning worked.
 print("rows:", len(interactions))

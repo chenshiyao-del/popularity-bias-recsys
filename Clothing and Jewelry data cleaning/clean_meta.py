@@ -4,7 +4,7 @@ from pathlib import Path
 # change path for other categories
 path = "data/interim/Clothing_Shoes_and_Jewelry_meta.parquet"
 
-COLUMNS = ["rating", "title", "text", "asin", "parent_asin", "user_id",
+COLUMNS = ["rating", "asin", "parent_asin", "user_id",
            "timestamp", "verified_purchase"]
 meta = pq.ParquetFile(path).read_row_group(0, columns=COLUMNS).to_pandas().sample(n=10_000, random_state=42).reset_index(drop=True)
 
