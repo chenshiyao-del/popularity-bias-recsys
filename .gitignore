@@ -6,6 +6,11 @@
 *.pkl
 *.zip
 
+data/
+*.parquet
+*.npy
+duckdb_tmp/
+
 # Python
 __pycache__/
 *.pyc
