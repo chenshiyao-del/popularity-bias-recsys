@@ -18,6 +18,8 @@ COLUMNS = ["rating", "title", "text", "asin", "parent_asin", "user_id",
 SAMPLE_FRACTION = 0.25
 RANDOM_SEED = 42
 df = pq.ParquetFile(path).read_row_group(0, columns=COLUMNS).to_pandas()
+
+# Change and get rid of this
 users = df["user_id"].drop_duplicates().sample(frac=1, random_state=RANDOM_SEED)
 keep = df["user_id"].value_counts().reindex(users).cumsum()
 keep = keep[keep <= 10_000].index
@@ -59,7 +61,7 @@ reviews = reviews.dropna(subset=["user_id", "parent_asin", "rating", "timestamp"
 
 # Removing duplicate user item interactions
 n0 = len(reviews)
-reviews = reviews.drop_duplicates()   # exact duplicate rows
+reviews = reviews.drop_duplicates()  
 dup_pairs = reviews.duplicated(["user_id", "parent_asin"], keep=False).sum()
 print(f"Exact duplicates removed: {n0 - len(reviews):,}")
 print(f"Rows in repeated (user, parent_asin) pairs: {dup_pairs:,} ({dup_pairs/len(reviews):.2%})")
@@ -110,12 +112,32 @@ if not pd.api.types.is_datetime64_any_dtype(data["timestamp"]):
     data["timestamp"] = pd.to_datetime(data["timestamp"], unit="ms", errors="coerce")
 
 
-meta_items = meta.drop_duplicates("parent_asin").set_index("parent_asin")
-meta_items["store"] = meta_items["store"].replace("", np.nan)
-# description / features were saved as JSON strings; an empty list "[]" counts as missing
-for col in ["description", "features"]:
-    if col in meta_items.columns:
-        meta_items[col] = meta_items[col].replace("[]", np.nan)
+
+meta = meta.drop_duplicates("parent_asin")
+ 
+# flattened fields cleaning
+meta["price"] = pd.to_numeric(meta["price"], errors="coerce")
+meta["store"] = meta["store"].replace("", np.nan)
+ 
+# Optional: Use regular expressions to directly extract the brand from the JSON string without parsing the entire dict
+meta["brand"] = meta["details"].str.extract(r'"Brand"\s*:\s*"([^"]*)"', expand=False)
+meta["brand"] = meta["brand"].fillna(
+    meta["details"].str.extract(r'"brand"\s*:\s*"([^"]*)"', expand=False)
+)
+ 
+# Optional: Estimate the number of categories using the number of commas without parsing the list
+meta["n_categories"] = meta["categories"].fillna("").str.count(",") + 1
+meta.loc[meta["categories"].isna(), "n_categories"] = 0
+ 
+# check lost
+print("Meta missing share:\n",
+      meta[["main_category", "price", "store", "brand"]].isna().mean())
+ 
+# Coverage: How many of the items that have been commented on are recorded in meta
+reviewed_items = reviews["parent_asin"].unique()
+coverage = meta["parent_asin"].isin(reviewed_items).mean()
+print(f"Reviewed items with metadata: {coverage:.2%}")
+
 
 
 # Defining the helper functions
