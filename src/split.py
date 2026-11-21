@@ -33,7 +33,6 @@ REPO_DIR = Path(__file__).resolve().parent.parent
 IN_PATH = REPO_DIR / "data" / "interim" / f"{CATEGORY}_interactions.parquet"
 OUT_DIR = REPO_DIR / "data" / "processed" / CATEGORY / f"k{K_CORE}"
 
-
 def describe(df, name):
     print(f"{name:>10}: {len(df):>10,} rows | {df['user_id'].nunique():>9,} users "
           f"| {df['parent_asin'].nunique():>9,} items")
