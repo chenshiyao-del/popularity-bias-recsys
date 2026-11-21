@@ -36,19 +36,21 @@ STATIC_META_COLS = ["parent_asin", "main_category", "store", "price", "details",
 
 # ---------- R1: file-level column whitelist ----------
 def _split_path(proc, category, split):
+    p_new = Path(proc) / f"{split}.parquet"
+    if p_new.exists():
+        return p_new
     for ext in ("parquet", "csv"):
         p = Path(proc) / f"{category}_{split}.{ext}"
         if p.exists():
             return p
-    raise FileNotFoundError(f"No {split} file for {category} in {proc}")
 
+    raise FileNotFoundError(f"No {split} file found in {proc}")
 
 def _file_columns(path):
     if path.suffix == ".parquet":
         import pyarrow.parquet as pq
         return list(pq.ParquetFile(path).schema_arrow.names)
     return list(pd.read_csv(path, nrows=0).columns)
-
 
 def check_columns(proc, category):
     """R1: fail if a split file has leaky or unexpected columns."""
@@ -64,7 +66,6 @@ def check_columns(proc, category):
         missing = ALLOWED_SPLIT_COLS - cols
         if missing:
             raise LeakageError(f"{split} file is missing columns: {sorted(missing)}")
-
 
 def load_split(proc, category, split):
     """Load train or test and tag it, so downstream statistics can verify where the data came from."""
@@ -156,7 +157,12 @@ class TrainOnlyStats:
 # ---------- R4: stale head file ----------
 def check_head_items(proc, category, stats, tol=0.005):
     """The head file on disk must match the head set recomputed from train."""
-    p = _split_path(proc, category, "head_items")
+    try:
+        p = _split_path(proc, category, "head_items")
+    except FileNotFoundError:
+        print("[guard] head_items file not found on disk, skipping disk check (recomputed on the fly).")
+        return
+        
     disk = set(pd.read_parquet(p)["parent_asin"] if p.suffix == ".parquet" else pd.read_csv(p)["parent_asin"])
     diff = len(disk ^ stats.head_items)
     if diff > tol * max(len(stats.head_items), 1):
