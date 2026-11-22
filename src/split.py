@@ -38,7 +38,6 @@ HEAD_SHARE = 0.20     # must match TrainOnlyStats(head_share=...) in leakage_gua
 IN_PATH = config.REPO_DIR / "data" / "interim" / f"{CATEGORY}_interactions.parquet"
 OUT_DIR = config.PROC / CATEGORY / f"k{K_CORE}"
 
-
 def describe(df, name):
     print(f"{name:>10}: {len(df):>10,} rows | {df['user_id'].nunique():>9,} users "
           f"| {df['parent_asin'].nunique():>9,} items")
