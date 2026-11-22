@@ -21,7 +21,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("reviews", help="review/interactions parquet file")
 parser.add_argument("--meta", help="optional meta parquet, only used to show item titles")
 parser.add_argument("--k", type=int, default=10)
-parser.add_argument("--sample-users", type=int, default=20000, help="0 = use all users")
+parser.add_argument("--sample-users", type=int, default=0, help="0 = use all users")
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--neighbors", type=int, default=100,
                     help="similar items kept per item (bounds memory; raise for better recall)")
@@ -46,72 +46,87 @@ def to_torch(m):
     return torch.sparse_coo_tensor(idx, val, m.shape, device=device).coalesce()
 
 
-# ---------- 1. load (only the needed columns) + filter ----------
-print("[1/7] loading + filtering interactions...")
-available = set(pq.ParquetFile(args.reviews).schema.names)
+# ---------- 1. load (only the needed columns), as compact integer arrays ----------
+# The 60M+ row file is streamed one row group at a time. The two ID columns are
+# hashed to uint64 right away, so the big string columns never exist in memory
+# for the whole file (pandas string categories on 61M rows run out of RAM).
+# Whole file as arrays: 2 x uint64 + 1 x int64 per row, ~1.5 GB at 61M rows.
+# 64-bit hashes make a collision between two different IDs practically impossible
+# (~1e-5 probability across 22M users, far less for items).
+print("[1/7] loading interactions...")
+pf = pq.ParquetFile(args.reviews)
+available = set(pf.schema.names)
 need = {"user_id", "parent_asin", "timestamp"}
 if not need <= available:
     raise SystemExit(f"This file isn't a review file. Missing columns: {need - available}\n"
                      f"(Item-CF needs user_id + parent_asin + timestamp; meta files have no user_id.)")
 
-cols = list(need)   # no cleaning here: the input is expected to be already cleaned
 
-# Stream the file one row group at a time. Reading a 60M+ row file in one go
-# (pd.read_parquet) asks for multi-GB contiguous buffers and dies with
-# ArrowMemoryError. When --sample-users is set, users are chosen by hashing
-# user_id, so a user is kept or dropped consistently across ALL row groups and
-# only the sampled rows are ever held in memory.
-pf = pq.ParquetFile(args.reviews)
+def hash_ids(series):
+    return pd.util.hash_pandas_object(series, index=False).to_numpy()
+
+
 n_rows = pf.metadata.num_rows
-frac = 1.0
-if args.sample_users:
-    first = pf.read_row_group(0, columns=["user_id"]).to_pandas()["user_id"]
-    est_users = max(1, int(first.nunique() / max(len(first), 1) * n_rows))   # rough distinct-user estimate
-    frac = min(1.0, 1.3 * args.sample_users / est_users)                     # oversample, trimmed below
-    print(f"      ~{est_users:,} users estimated -> keeping a {frac:.4%} hash slice, then trimming to {args.sample_users:,}")
-elif n_rows > 20_000_000:
-    print("      WARNING: --sample-users 0 on a very large file may still run out of RAM.")
-HASH_LIMIT = int(frac * 2**64) if frac < 1.0 else None
-
-parts = []
+u_hash = np.empty(n_rows, dtype=np.uint64)
+i_hash = np.empty(n_rows, dtype=np.uint64)
+ts = np.empty(n_rows, dtype=np.int64)
+pos = 0
 for g in range(pf.num_row_groups):
-    chunk_df = pf.read_row_group(g, columns=cols).to_pandas()
-    if HASH_LIMIT is not None:
-        h = pd.util.hash_pandas_object(chunk_df["user_id"], index=False).to_numpy()
-        chunk_df = chunk_df[h < np.uint64(HASH_LIMIT)]
-    parts.append(chunk_df)
+    chunk_df = pf.read_row_group(g, columns=sorted(need)).to_pandas()
+    m = len(chunk_df)
+    u_hash[pos:pos + m] = hash_ids(chunk_df["user_id"])
+    i_hash[pos:pos + m] = hash_ids(chunk_df["parent_asin"])
+    ts[pos:pos + m] = chunk_df["timestamp"].astype("int64").to_numpy()
+    pos += m
+    del chunk_df
     if (g + 1) % 10 == 0 or g + 1 == pf.num_row_groups:
-        print(f"      row group {g + 1}/{pf.num_row_groups}, kept {sum(len(p) for p in parts):,} rows so far", flush=True)
-df = pd.concat(parts, ignore_index=True)
-del parts
-df["user_id"] = df["user_id"].astype(str).astype("category")
-df["parent_asin"] = df["parent_asin"].astype(str).astype("category")
-df = df.sort_values("timestamp")                    # only ordering, needed for the leave-last-out split
+        print(f"      row group {g + 1}/{pf.num_row_groups}, loaded {pos:,} rows", flush=True)
+u_hash, i_hash, ts = u_hash[:pos], i_hash[:pos], ts[:pos]
 
-if args.sample_users:
-    keep = df["user_id"].drop_duplicates()
-    keep = keep.sample(min(args.sample_users, len(keep)), random_state=args.seed)
-    df = df[df["user_id"].isin(keep)]
+u_all, u_uniq = pd.factorize(u_hash)                # int codes 0..n_users_all-1
+del u_hash
+n_users_all = len(u_uniq)
 
-df["user_id"] = df["user_id"].cat.remove_unused_categories()
-df["parent_asin"] = df["parent_asin"].cat.remove_unused_categories()
-print(f"{len(df):,} interactions, {df.user_id.nunique():,} users, {df.parent_asin.nunique():,} items")
+if args.sample_users and args.sample_users < n_users_all:      # exact number of users, chosen by seed
+    rng = np.random.default_rng(args.seed)
+    keep_u = np.zeros(n_users_all, dtype=bool)
+    keep_u[rng.choice(n_users_all, args.sample_users, replace=False)] = True
+    m = keep_u[u_all]
+    u_all, i_hash, ts = u_all[m], i_hash[m], ts[m]
+    del keep_u, m
+
+i_all, i_uniq = pd.factorize(i_hash)                # int codes 0..n_items_all-1 (i_uniq = item hashes)
+del i_hash
+
+order = np.argsort(ts, kind="stable")               # only ordering, needed for the leave-last-out split
+u_all = u_all[order].astype(np.int32)
+i_all = i_all[order].astype(np.int32)
+del ts, order
+print(f"{len(u_all):,} interactions, {len(np.unique(u_all)):,} users, {len(np.unique(i_all)):,} items")
 
 # ---------- 2. split: each user's most recent item is the test item ----------
 print("[2/7] splitting train/test...")
-test = df.groupby("user_id", observed=True).tail(1)
-train = df.drop(test.index)
+last = np.full(n_users_all, -1, dtype=np.int64)
+last[u_all] = np.arange(len(u_all))                 # repeated index: the last write wins = most recent row
+is_test = np.zeros(len(u_all), dtype=bool)
+is_test[last[last >= 0]] = True
+test_u, test_i = u_all[is_test], i_all[is_test]
+tr_u, tr_i = u_all[~is_test], i_all[~is_test]
+del u_all, i_all, is_test, last
 
 # ---------- 3. user x item matrix (1 = interacted) ----------
 print("[3/7] building user x item matrix...")
-user_ids = train["user_id"].astype("category").cat.remove_unused_categories()
-item_ids = train["parent_asin"].astype("category").cat.remove_unused_categories()
-n_users, n_items = len(user_ids.cat.categories), len(item_ids.cat.categories)
-R = csr_matrix((np.ones(len(train), dtype="float32"),
-                (user_ids.cat.codes, item_ids.cat.codes)), shape=(n_users, n_items))
+tr_u_idx, tr_u_orig = pd.factorize(tr_u)            # only users / items that appear in train get a row / column
+tr_i_idx, tr_i_orig = pd.factorize(tr_i)
+n_users, n_items = len(tr_u_orig), len(tr_i_orig)
+R = csr_matrix((np.ones(len(tr_u), dtype="float32"), (tr_u_idx, tr_i_idx)), shape=(n_users, n_items))
 R.data[:] = 1.0                                     # binary interaction matrix (guards against repeated pairs)
-item_index = {a: i for i, a in enumerate(item_ids.cat.categories)}
-user_index = {u: i for i, u in enumerate(user_ids.cat.categories)}
+item_hash = i_uniq[tr_i_orig]                       # hash of each matrix column, to look up names later
+u_map = np.full(n_users_all, -1, dtype=np.int64)    # original user code -> matrix row (-1 = no train history)
+u_map[tr_u_orig] = np.arange(n_users)
+i_map = np.full(len(i_uniq), -1, dtype=np.int64)    # original item code -> matrix column (-1 = not in train)
+i_map[tr_i_orig] = np.arange(n_items)
+del tr_u, tr_i, tr_u_idx, tr_i_idx
 print(f"      matrix: {n_users:,} users x {n_items:,} items")
 
 # chunk size: a dense (chunk x n_items) float32 block, with ~3x headroom for topk etc.
@@ -170,9 +185,9 @@ def recommend(user_rows, k=K):
 
 # ---------- 6. evaluate ----------
 print("[5/7] preparing test set...")
-test = test[test["user_id"].isin(user_index) & test["parent_asin"].isin(item_index)]
-rows = test["user_id"].map(user_index).to_numpy()
-truth = test["parent_asin"].map(item_index).to_numpy()
+rows, truth = u_map[test_u], i_map[test_i]          # users with train history and test items seen in train
+ok = (rows >= 0) & (truth >= 0)
+rows, truth = rows[ok], truth[ok]
 
 t0 = time.time()
 print(f"[6/7] generating + scoring recommendations for {len(rows):,} test users (batch {chunk})...")
@@ -189,19 +204,49 @@ hit_rate = (recs == truth[:, None]).any(axis=1).mean()   # one test item per use
 print("[7/7] computing metrics...")
 item_pop = np.asarray(R.sum(axis=0)).ravel()
 head = item_pop >= np.quantile(item_pop, 0.8)            # top 20% most popular items
-print(f"\nHitRate@{K}:                {hit_rate:.4f}")
-print(f"Avg popularity of recs:     {item_pop[recs].mean():.1f}  (catalog avg {item_pop.mean():.1f})")
-print(f"Share of recs from top 20%: {head[recs].mean():.2%}")
-print(f"Item coverage:              {len(np.unique(recs)) / n_items:.2%}")
+
+
+def report_metrics(hit_rate, recs, head, item_pop, n_items, k):
+    """Print the evaluation metrics and return them as a dict."""
+    metrics = {
+        f"hit_rate@{k}": float(hit_rate),
+        "avg_rec_popularity": float(item_pop[recs].mean()),
+        "catalog_avg_popularity": float(item_pop.mean()),
+        "share_recs_top20pct": float(head[recs].mean()),
+        "item_coverage": float(len(np.unique(recs)) / n_items),
+    }
+    print(f"\nHitRate@{k}:                {metrics[f'hit_rate@{k}']:.4f}")
+    print(f"Avg popularity of recs:     {metrics['avg_rec_popularity']:.1f}  (catalog avg {metrics['catalog_avg_popularity']:.1f})")
+    print(f"Share of recs from top 20%: {metrics['share_recs_top20pct']:.2%}")
+    print(f"Item coverage:              {metrics['item_coverage']:.2%}")
+    return metrics
+
+
+metrics = report_metrics(hit_rate, recs, head, item_pop, n_items, K)
 
 # ---------- 7. optional: show readable examples using the meta file ----------
 if args.meta:
     meta = pd.read_parquet(args.meta, columns=["parent_asin", "title"]).drop_duplicates("parent_asin")
     titles = meta.set_index("parent_asin")["title"]
-    cats = item_ids.cat.categories
+    n_show = min(3, len(rows))
+    hist = [R[rows[j]].indices[:3] for j in range(n_show)]
+    shown = sorted({int(c) for j in range(n_show) for c in np.concatenate([hist[j], recs[j][:5]])})
+
+    # IDs were hashed while loading; recover the ASIN strings for just these few items
+    wanted = item_hash[shown]
+    asin_of = {}
+    for g in range(pf.num_row_groups):
+        col = pf.read_row_group(g, columns=["parent_asin"]).to_pandas()["parent_asin"]
+        h = hash_ids(col)
+        hit = np.isin(h, wanted)
+        for a, hh in zip(col[hit], h[hit]):
+            asin_of[int(hh)] = str(a)
+        if len(asin_of) == len(set(wanted.tolist())):
+            break
+    name = lambda c: str(titles.get(asin_of.get(int(item_hash[c])), asin_of.get(int(item_hash[c]))))
+
     print("\nExample recommendations:")
-    for j in range(min(3, len(rows))):
-        history = cats[R[rows[j]].indices]
-        print(f"\nUser has: {[str(titles.get(a, a))[:40] for a in history[:3]]}")
+    for j in range(n_show):
+        print(f"\nUser has: {[name(c)[:40] for c in hist[j]]}")
         for idx in recs[j][:5]:
-            print("  ->", str(titles.get(cats[idx], cats[idx]))[:70])
+            print("  ->", name(idx)[:70])
