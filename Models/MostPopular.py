@@ -1,5 +1,5 @@
 """
-Use by change path and category in config.py 
+Use by change path, category and k-core in config.py 
 """
 from pathlib import Path
 import sys
