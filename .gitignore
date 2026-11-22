@@ -1,28 +1,4 @@
-# Data file formats
-*.jsonl
-*.jsonl.gz
-*.parquet
-*.csv
-*.pkl
-*.zip
-
 data/
-*.parquet
-*.npy
-duckdb_tmp/
-
-# Python
+interim/
 __pycache__/
 *.pyc
-.ipynb_checkpoints/
-.venv/
-venv/
-
-# OS / editor
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
-
-# Hugging Face cache (if inside project)
-hf_cache/

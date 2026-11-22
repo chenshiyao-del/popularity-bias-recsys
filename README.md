@@ -1,10 +1,10 @@
-# Reproducing the Pipeline
+# Popularity bias in recommenders
 
-This document explains how to reproduce the full data pipeline for this project, from downloading the raw Amazon Reviews 2023 data to producing the train/test splits used by every recommendation model.
+Amazon Reviews 2023 data: https://amazon-reviews-2023.github.io/
 
-The pipeline has four steps:
-
-1. Download the raw data from https://amazon-reviews-2023.github.io/ 
-2. Run the `load_*` scripts to load and inspect reviews.
-3. Run the `extract_*` scripts to extract and verify item metadata.
-4. Run the cleaning and EDA notebook to produce the train/test splits.
+```
+pip install -r requirements.txt
+python prepare.py Clothing_Shoes_and_Jewelry.jsonl Clothing_Shoes_and_Jewelry   # clean reviews
+python split.py Clothing_Shoes_and_Jewelry 2                                    # 2-core, leave-last-out split
+python run.py Clothing_Shoes_and_Jewelry 2 itemcf                               # or mostpop / mf / gru; appends to results.csv
+```
