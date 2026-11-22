@@ -4,7 +4,7 @@ import pyarrow.parquet as pq
 from pathlib import Path
 
 
-CATEGORY = "Beauty_and_Personal_Care"   
+CATEGORY = "Amazon_Fashion"   
 
 REPO_DIR = Path(__file__).resolve().parent.parent
 INTERIM = REPO_DIR / "data" / "interim"

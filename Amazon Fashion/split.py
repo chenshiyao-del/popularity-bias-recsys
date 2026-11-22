@@ -20,9 +20,7 @@ Order of operations:
   4. head items = most popular TRAIN items covering 20% of train interactions
      (same rule as leakage_guard.TrainOnlyStats)
 
-Usage:
-  python split.py            # uses K_CORE from config.py
-  python split.py 5          # override, e.g. 5-core (then also update config.K_CORE)
+
 """
 import sys
 import json

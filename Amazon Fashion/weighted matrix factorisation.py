@@ -33,26 +33,25 @@ except ImportError:           # falls back to a (slower) chunked numpy solver
     HAVE_NUMBA = False
     print("numba not installed -> using numpy fallback. `pip install numba` for a big speedup.")
 
-# All shared settings come from config.py (change CATEGORY / K_CORE there, not here)
-CATEGORY = config.CATEGORY
-PROC = config.DATA_DIR        # data/processed/{CATEGORY}/k{K_CORE}/ -- where split.py saved the files
 
-# rating -> (preference, weight). Tweak here; 4 and 2 are interpolated choices.
+CATEGORY = config.CATEGORY
+PROC = config.DATA_DIR        
+
 RATING_MAP = {
     5: (1.0, 1.00),
     4: (1.0, 0.75),
     3: (1.0, 0.50),
-    2: (0.0, 0.50),   # mild negative
-    1: (0.0, 1.00),   # strong negative
+    2: (0.0, 0.50),   
+    1: (0.0, 1.00),   
 }
 
-FACTORS = 32          # use 64 for the final run; cost scales with FACTORS^2
+FACTORS = 32         
 REG = 0.1
-ALPHA = 20.0          # how much more an observed cell counts than an unrated one
-ITERATIONS = 10       # use 15 for the final run
-MAX_BATCH_NNZ = 20_000  # numpy fallback: max ratings per batch (bounds the nnz x k x k temp)
+ALPHA = 20.0          
+ITERATIONS = 10       
+MAX_BATCH_NNZ = 20_000  
 TOP_K = config.K
-EVAL_SAMPLE = None    # None = all test users; or e.g. 100_000 to match a sampled NCF run
+EVAL_SAMPLE = None    
 SEED = 42
 
 rng = np.random.default_rng(SEED)
