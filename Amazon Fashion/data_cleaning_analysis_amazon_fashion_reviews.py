@@ -22,7 +22,6 @@ ONLY_VERIFIED = True
 MAX_ROW_GROUPS = None   # set to e.g. 2 for a quick test run
 
 
-
 # ---------------------------------------------------------------------------
 # Reviews: read every row group in chunks, clean each chunk
 # ---------------------------------------------------------------------------
@@ -127,7 +126,9 @@ meta = meta.drop_duplicates("parent_asin").reset_index(drop=True)
 meta["price"] = pd.to_numeric(meta["price"], errors="coerce")
 meta["store"] = meta["store"].replace("", np.nan)
 
+
 # Item features (feature engineering; keep only if your models use them)
+
 meta["brand"] = meta["details"].apply(
     lambda d: d.get("Brand") or d.get("brand") if isinstance(d, dict) else None)
 meta["n_categories"] = meta["categories"].apply(lambda c: len(c) if isinstance(c, list) else 0)
