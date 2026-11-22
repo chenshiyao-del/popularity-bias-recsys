@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import scipy.sparse
 import torch
-from models import gru, itemcf, mf, mostpop
+from models import itemcf, wmf, mostpop
 
 cat, k_core, model = sys.argv[1], sys.argv[2], sys.argv[3]
 K = 10
@@ -61,10 +61,10 @@ if model == "mostpop":
     score = mostpop.build(u, i, cnt, n_users, n_items, dev, row_slicer)
 elif model == "itemcf":
     score = itemcf.build(u, i, cnt, n_users, n_items, dev, row_slicer)
-elif model == "mf":
-    score = mf.build(u, i, cnt, n_users, n_items, dev, row_slicer)
-elif model == "gru":
-    score = gru.build(u, i, cnt, n_users, n_items, dev, row_slicer)
+elif model == "wmf":
+    score = mf.build(u, i, cnt, n_users, n_items, dev, row_slicer, score = wmf.build(u, i, cnt, n_users, n_items, dev, row_slicer,
+                      r=train["rating"].to_numpy()))
+
 
 # Recommend the top-K unseen items for every user
 print()
