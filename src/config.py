@@ -5,7 +5,8 @@ from pathlib import Path
 REPO_DIR = Path(__file__).resolve().parent.parent
 PROC = REPO_DIR / "data" / "processed" 
 CATEGORY = "Beauty_and_Personal_Care"
-K_CORE = 5                      
+# change k_core here. 
+K_CORE = 2                      
 
 K = 10                          # length of recommendation list (Recall@10)
 D = 2000                        # candidate depth: None means ranking over all unseen items

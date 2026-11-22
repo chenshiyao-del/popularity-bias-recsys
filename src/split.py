@@ -24,6 +24,7 @@ import hashlib
 import pandas as pd
 from pathlib import Path
 
+#change category and path here 
 CATEGORY = "Beauty_and_Personal_Care"
 K_CORE = 0            # 0 = no k-core filtering; 5 = every user and item has >= 5 interactions
 if len(sys.argv) > 1:

@@ -201,7 +201,7 @@ if args.meta:
     cats = item_ids.cat.categories
     print("\nExample recommendations:")
     for j in range(min(3, len(rows))):
-        history = cats[R[rows[j]].indices]
+        history = cats[R[int(rows[j])].indices]
         print(f"\nUser has: {[str(titles.get(a, a))[:40] for a in history[:3]]}")
         for idx in recs[j][:5]:
             print("  ->", str(titles.get(cats[idx], cats[idx]))[:70])
