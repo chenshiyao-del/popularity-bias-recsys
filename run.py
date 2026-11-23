@@ -1,6 +1,6 @@
 """Train one recommender, recommend top-K items to every test user, and report the results.
 
-Models live in models/<name>.py. Each has a build(...) function that returns a score function.
+Models live in <name>.py next to this file. Each has a build(...) function that returns a score function.
 Metrics: Recall@K and NDCG@K (accuracy), Recall split by head/tail items, and popularity-bias
 measures. ARP is the average training popularity of the recommended items. Gini and Coverage
 measure how evenly recommendations spread over the catalog. Head/tail exposure gives the share of
@@ -9,7 +9,7 @@ interactions) versus everything else. Each run appends one row to results.csv.
 
 Settings: K = list length, BATCH = users scored per GPU batch (lower it if the GPU runs out of memory).
 
-Usage: python run.py <category> <k> <mostpop|itemcf|mf|gru>
+Usage: python run.py <category> <k> <mostpop|itemcf|mf>
 """
 import os
 import sys
@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import scipy.sparse
 import torch
-from models import gru, itemcf, mf, mostpop
+import itemcf, mf, mostpop
 
 cat, k_core, model = sys.argv[1], sys.argv[2], sys.argv[3]
 K = 10
@@ -63,8 +63,6 @@ elif model == "itemcf":
     score = itemcf.build(u, i, cnt, n_users, n_items, dev, row_slicer)
 elif model == "mf":
     score = mf.build(u, i, cnt, n_users, n_items, dev, row_slicer)
-elif model == "gru":
-    score = gru.build(u, i, cnt, n_users, n_items, dev, row_slicer)
 
 # Recommend the top-K unseen items for every user
 print()
