@@ -21,7 +21,7 @@ from models import gru, itemcf, mf, mostpop
 
 cat, k_core, model = sys.argv[1], sys.argv[2], sys.argv[3]
 K = 10
-BATCH = 256
+BATCH = 64
 dev = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Load the train/test split
