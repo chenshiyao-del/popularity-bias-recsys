@@ -5,7 +5,6 @@ latest review. Writes data/<category>_interactions.parquet.
 
 Usage: python prepare.py <reviews.jsonl> <category>
 """
-import gzip
 import json
 import os
 import sys
@@ -16,14 +15,15 @@ path, cat = sys.argv[1], sys.argv[2]
 # Load raw reviews
 print("Streaming reading file...")
 records = []
-with gzip.open(path, "rt", encoding="utf-8") as f:
+with open(path, encoding="utf-8") as f:
     for line in f:
         try:
             obj = json.loads(line)
-            # only extract 5 fields 
+            # only extract 5 fields
             records.append({
                 "user_id": obj.get("user_id"),
                 "parent_asin": obj.get("parent_asin"),
+                "asin": obj.get("asin"),
                 "rating": obj.get("rating"),
                 "timestamp": obj.get("timestamp"),
                 "verified_purchase": obj.get("verified_purchase")
@@ -33,11 +33,17 @@ with gzip.open(path, "rt", encoding="utf-8") as f:
 
 print(f"Streamed {len(records):,} rows. Converting to DataFrame...")
 df = pd.DataFrame(records)
-del records 
+del records
+
+# Fix types (bad values become NaN/NaT) and drop rows with any missing value
+cols = ["rating", "asin", "parent_asin", "user_id", "timestamp", "verified_purchase"]
+df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", errors="coerce")
+df["rating"] = pd.to_numeric(df["rating"], errors="coerce")
+df = df.dropna(subset=cols)
+ 
 
 # Clean: verified purchases, needed columns, one interaction per (user, item)
 df = df[df["verified_purchase"] == True]
-df = df[["user_id", "parent_asin", "rating", "timestamp"]].dropna()
 df = df.sort_values("timestamp", kind="stable").drop_duplicates(["user_id", "parent_asin"], keep="last")
 
 # Save
