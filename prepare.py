@@ -14,9 +14,12 @@ path, cat = sys.argv[1], sys.argv[2]
 # Load raw reviews
 df = pd.read_json(path, lines=True, convert_dates=False)
 
-# Clean: verified purchases, needed columns, one interaction per (user, item)
+# Fix types (bad values become NaN/NaT) and drop rows with any missing value
+cols = ["rating", "asin", "parent_asin", "user_id", "timestamp", "verified_purchase"]
+df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", errors="coerce")
+df["rating"] = pd.to_numeric(df["rating"], errors="coerce")
+df = df.dropna(subset = cols)
 df = df[df["verified_purchase"] == True]
-df = df[["user_id", "parent_asin", "rating", "timestamp"]].dropna()
 df = df.sort_values("timestamp", kind="stable").drop_duplicates(["user_id", "parent_asin"], keep="last")
 
 # Save

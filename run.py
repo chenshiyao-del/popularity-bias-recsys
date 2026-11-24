@@ -7,9 +7,8 @@ measure how evenly recommendations spread over the catalog. Head/tail exposure g
 recommendations from the most popular items (the head, which together make up 20% of training
 interactions) versus everything else. Each run appends one row to results.csv.
 
-Settings: K = list length, BATCH = users scored per GPU batch (lower it if the GPU runs out of memory).
 
-Usage: python run.py <category> <k> <mostpop|itemcf|mf|gru>
+Usage: python run.py <category> <k> <mostpop|itemcf|wmf>
 """
 import os
 import sys
@@ -62,8 +61,8 @@ if model == "mostpop":
 elif model == "itemcf":
     score = itemcf.build(u, i, cnt, n_users, n_items, dev, row_slicer)
 elif model == "wmf":
-    score = mf.build(u, i, cnt, n_users, n_items, dev, row_slicer, score = wmf.build(u, i, cnt, n_users, n_items, dev, row_slicer,
-                      r=train["rating"].to_numpy()))
+    score = wmf.build(u, i, cnt, n_users, n_items, dev, row_slicer,
+                      r = train["rating"].to_numpy())
 
 
 # Recommend the top-K unseen items for every user
@@ -111,6 +110,7 @@ for key, val in metrics.items():
     print(f"{key:24} {val}")
 pd.DataFrame([metrics]).to_csv("results.csv", mode="a", header=not os.path.exists("results.csv"), index=False)
 
+"""
 # Show example recommendations with item titles (if the meta file exists)
 meta_path = f"data/interim/{cat}_meta.parquet"
 if os.path.exists(meta_path):
@@ -120,3 +120,4 @@ if os.path.exists(meta_path):
         print(f"\nuser has: {[name(j) for j in i[u == test_u[t]][:3]]}")
         for j in recs[t, :5]:
             print("  ->", name(j))
+"""
