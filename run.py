@@ -110,14 +110,4 @@ for key, val in metrics.items():
     print(f"{key:24} {val}")
 pd.DataFrame([metrics]).to_csv("results.csv", mode="a", header=not os.path.exists("results.csv"), index=False)
 
-"""
-# Show example recommendations with item titles (if the meta file exists)
-meta_path = f"data/interim/{cat}_meta.parquet"
-if os.path.exists(meta_path):
-    titles = pd.read_parquet(meta_path, columns=["parent_asin", "title"]).drop_duplicates("parent_asin").set_index("parent_asin")["title"]
-    name = lambda j: str(titles.get(items[j], items[j]))[:60]
-    for t in range(3):
-        print(f"\nuser has: {[name(j) for j in i[u == test_u[t]][:3]]}")
-        for j in recs[t, :5]:
-            print("  ->", name(j))
-"""
+
