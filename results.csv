@@ -1,0 +1,2 @@
+category,k_core,model,Recall@10,NDCG@10,Recall@10_head_items,Recall@10_tail_items,test_items_in_head,ARP,Gini_exposure,Coverage,head_exposure,tail_exposure
+Beauty_and_Personal_Care,2,mostpop,0.008726041169454954,0.005098259974952867,0.043853903985755914,0.0,0.1989798028537947,7379.29440842482,0.9999797819177372,3.2291723429461755e-05,1.0,0.0

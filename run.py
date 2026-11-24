@@ -1,6 +1,6 @@
 """Train one recommender, recommend top-K items to every test user, and report the results.
 
-Models live in <name>.py next to this file. Each has a build(...) function that returns a score function.
+Models live in models/<name>.py. Each has a build(...) function that returns a score function.
 Metrics: Recall@K and NDCG@K (accuracy), Recall split by head/tail items, and popularity-bias
 measures. ARP is the average training popularity of the recommended items. Gini and Coverage
 measure how evenly recommendations spread over the catalog. Head/tail exposure gives the share of
@@ -9,7 +9,7 @@ interactions) versus everything else. Each run appends one row to results.csv.
 
 Settings: K = list length, BATCH = users scored per GPU batch (lower it if the GPU runs out of memory).
 
-Usage: python run.py <category> <k> <mostpop|itemcf|mf>
+Usage: python run.py <category> <k> <mostpop|itemcf|mf|gru>
 """
 import os
 import sys
@@ -17,11 +17,11 @@ import numpy as np
 import pandas as pd
 import scipy.sparse
 import torch
-import itemcf, mf, mostpop
+from models import itemcf, wmf, mostpop
 
 cat, k_core, model = sys.argv[1], sys.argv[2], sys.argv[3]
 K = 10
-BATCH = 64
+BATCH = 256
 dev = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Load the train/test split
@@ -61,8 +61,10 @@ if model == "mostpop":
     score = mostpop.build(u, i, cnt, n_users, n_items, dev, row_slicer)
 elif model == "itemcf":
     score = itemcf.build(u, i, cnt, n_users, n_items, dev, row_slicer)
-elif model == "mf":
-    score = mf.build(u, i, cnt, n_users, n_items, dev, row_slicer)
+elif model == "wmf":
+    score = mf.build(u, i, cnt, n_users, n_items, dev, row_slicer, score = wmf.build(u, i, cnt, n_users, n_items, dev, row_slicer,
+                      r=train["rating"].to_numpy()))
+
 
 # Recommend the top-K unseen items for every user
 print()
